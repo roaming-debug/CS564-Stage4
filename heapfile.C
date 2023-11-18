@@ -388,47 +388,45 @@ const Status InsertFileScan::insertRecord(const Record & rec, RID& outRid)
         if ((status = bufMgr->readPage(filePtr, curPageNo, curPage)) != OK){
             return status;
         }
-        // insert record
-        if ((status = curPage->insertRecord(rec, outRid)) == OK){
-            // able to insert record
-            headerPage -> recCnt++;
-            hdrDirtyFlag = true;
-            curDirtyFlag = true;
-            return status;
-        }
-        else {
-            // page is full
-            // alloc new page
-            if ((status = bufMgr->allocPage(filePtr, newPageNo, newPage)) != OK){
-                return status;
-            }
-            newPage->init(newPageNo);
-
-            // header page book keepin
-            headerPage->pageCnt++;
-            headerPage->lastPage = newPageNo;
-	        hdrDirtyFlag = true;
-
-            // link page
-            curPage->setNextPage(newPageNo);
-
-            // make current page the newly allocated page
-	        curPage = newPage;
-	        curPageNo = newPageNo;
-
-	        // insert the record again
-            if ((status = curPage->insertRecord(rec, outRid)) != OK){
-                return status;
-            }
-            headerPage -> recCnt++;
-            hdrDirtyFlag = true;
-            curDirtyFlag = true;
-            return status;
-
-        }
-
     } 
-  
+
+    // insert record
+    if ((status = curPage->insertRecord(rec, outRid)) == OK){
+        // able to insert record
+        headerPage -> recCnt++;
+        hdrDirtyFlag = true;
+        curDirtyFlag = true;
+        return status;
+    }
+    else {
+        // page is full
+        // alloc new page
+        if ((status = bufMgr->allocPage(filePtr, newPageNo, newPage)) != OK){
+            return status;
+        }
+        newPage->init(newPageNo);
+
+        // header page book keepin
+        headerPage->pageCnt++;
+        headerPage->lastPage = newPageNo;
+	    hdrDirtyFlag = true;
+
+        // link page
+        curPage->setNextPage(newPageNo);
+
+        // make current page the newly allocated page
+	    curPage = newPage;
+	    curPageNo = newPageNo;
+
+	    // insert the record again
+        if ((status = curPage->insertRecord(rec, outRid)) != OK){
+            return status;
+        }
+        headerPage -> recCnt++;
+        hdrDirtyFlag = true;
+        curDirtyFlag = true;
+        return status;
+    } 
 }
 
 
