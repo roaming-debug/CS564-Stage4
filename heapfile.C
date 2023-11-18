@@ -118,8 +118,8 @@ const int HeapFile::getRecCnt() const
 const Status HeapFile::getRecord(const RID & rid, Record & rec)
 {
     Status status;
-
     // cout<< "getRecord. record (" << rid.pageNo << "." << rid.slotNo << ")" << endl;
+    // bufMgr.
    
    
    
@@ -220,20 +220,64 @@ const Status HeapFileScan::scanNext(RID& outRid)
 {
     Status 	status = OK;
     RID		nextRid;
-    RID		tmpRid;
+    RID		tmpRid = NULLRID;
     int 	nextPageNo;
     Record      rec;
+    // this scanner has not scanned any data yet
+    if (curPage == NULL) {
+        curPageNo = headerPage->firstPage;
+        if ((status = bufMgr->readPage(filePtr, curPageNo, curPage)) != OK) {
+            return status;
+        }
+    }
+    // read current page
+    while (true) {
+        // read the records in curPage
+        bool readPageFirstTime = true;
+        while (true) {
+            if (readPageFirstTime) {
+                readPageFirstTime = false;
+                if (curRec.pageNo == curPageNo) {
+                    if ((status = curPage->nextRecord(curRec, tmpRid)) == ENDOFPAGE) {
+                        break;
+                    }
+                }
+                else {
+                    if ((status = curPage->firstRecord(tmpRid)) == ENDOFPAGE) {
+                        break;
+                    }
+                }
+            }
+            else {
+                if ((status = curPage->nextRecord(tmpRid, tmpRid)) == ENDOFPAGE) {
+                    break;
+                }
+            }
+            if ((status = curPage->getRecord(tmpRid, rec)) != OK) {
+                bufMgr->unPinPage(filePtr, curPageNo, false);
+                return status;
+            }
+            if (matchRec(rec)) {
+                outRid = tmpRid;
+                curRec = tmpRid;
+                return OK;
+            }
+        }
 
-    
-	
-	
-	
-	
-	
-	
-	
-	
-	
+        bufMgr->unPinPage(filePtr, curPageNo, false);
+        // read the next page
+        if ((status = curPage->getNextPage(nextPageNo)) != OK) {
+            return status;
+        }
+        if (nextPageNo == -1) {
+            return FILEEOF;
+        }
+        curPageNo = nextPageNo;
+        if ((status = bufMgr->readPage(filePtr, curPageNo, curPage)) != OK) {
+            return status;
+        }
+    }
+    return FILEEOF;
 }
 
 
