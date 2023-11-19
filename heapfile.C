@@ -18,18 +18,44 @@ const Status createHeapFile(const string fileName)
 		// file doesn't exist. First create it and allocate
 		// an empty header page and data page.
 		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
-		
+		Status status;
+        if ((status = db.createFile(fileName)) != OK){
+            return status;
+        }
+        // openfile
+        if ((status = db.openFile(fileName, file)) != OK){
+            return status;
+        }
+
+        // header page alloc
+        if ((status = bufMgr ->allocPage(file, hdrPageNo, newPage)) != OK){
+            return status;
+        }
+
+        hdrPage = (FileHdrPage*)newPage;
+
+        // first data page alloc
+        if ((status = bufMgr ->allocPage(file, newPageNo, newPage)) != OK){
+            return status;
+        }
+
+        newPage->init(newPageNo);
+
+        // set up header page
+        hdrPage->firstPage = newPageNo;
+        hdrPage->lastPage = newPageNo;
+        hdrPage->pageCnt = 1;
+        hdrPage->recCnt = 0;
+        strcpy(hdrPage->fileName, fileName.c_str());
+
+		if ((status = bufMgr ->unPinPage(file, newPageNo, true)) != OK){
+            return status;
+        }
+        if ((status = bufMgr ->unPinPage(file, hdrPageNo, true)) != OK){
+            return status;
+        }
+
+		return status;	
     }
     return (FILEEXISTS);
 }
@@ -416,18 +442,50 @@ const Status InsertFileScan::insertRecord(const Record & rec, RID& outRid)
         return INVALIDRECLEN;
     }
 
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+    if (curPage == NULL){
+        curPageNo = headerPage -> lastPage;
+        if ((status = bufMgr->readPage(filePtr, curPageNo, curPage)) != OK){
+            return status;
+        }
+    } 
+
+    // insert record
+    if ((status = curPage->insertRecord(rec, outRid)) == OK){
+        // able to insert record
+        headerPage -> recCnt++;
+        hdrDirtyFlag = true;
+        curDirtyFlag = true;
+        return status;
+    }
+    else {
+        // page is full
+        // alloc new page
+        if ((status = bufMgr->allocPage(filePtr, newPageNo, newPage)) != OK){
+            return status;
+        }
+        newPage->init(newPageNo);
+
+        // header page book keepin
+        headerPage->pageCnt++;
+        headerPage->lastPage = newPageNo;
+	    hdrDirtyFlag = true;
+
+        // link page
+        curPage->setNextPage(newPageNo);
+
+        // make current page the newly allocated page
+	    curPage = newPage;
+	    curPageNo = newPageNo;
+
+	    // insert the record again
+        if ((status = curPage->insertRecord(rec, outRid)) != OK){
+            return status;
+        }
+        headerPage -> recCnt++;
+        hdrDirtyFlag = true;
+        curDirtyFlag = true;
+        return status;
+    } 
 }
 
 
