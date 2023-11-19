@@ -119,14 +119,27 @@ const Status HeapFile::getRecord(const RID & rid, Record & rec)
 {
     Status status;
     // cout<< "getRecord. record (" << rid.pageNo << "." << rid.slotNo << ")" << endl;
-    // bufMgr.
-   
-   
-   
-   
-   
-   
-   
+    // assume the current page is pinned
+    if (curPageNo == rid.pageNo && curPage != NULL) {
+        if ((status = curPage->getRecord(rid, rec)) != OK) {
+            return status;
+        }
+        return OK;
+    }
+    if (curPage != NULL) {
+        bufMgr->unPinPage(filePtr, curPageNo, curDirtyFlag);
+        curDirtyFlag = false;
+    }
+    if ((status = bufMgr->readPage(filePtr, rid.pageNo, curPage)) != OK) {
+        return status;
+    }
+    curDirtyFlag = false;
+    curPageNo = rid.pageNo;
+    if ((status = curPage->getRecord(rid, rec)) != OK) {
+        return status;
+    }
+    curRec = rid;
+    return OK;
 }
 
 HeapFileScan::HeapFileScan(const string & name,
@@ -254,7 +267,8 @@ const Status HeapFileScan::scanNext(RID& outRid)
                 }
             }
             if ((status = curPage->getRecord(tmpRid, rec)) != OK) {
-                bufMgr->unPinPage(filePtr, curPageNo, false);
+                bufMgr->unPinPage(filePtr, curPageNo, curDirtyFlag);
+                curDirtyFlag = false;
                 return status;
             }
             if (matchRec(rec)) {
@@ -264,7 +278,8 @@ const Status HeapFileScan::scanNext(RID& outRid)
             }
         }
 
-        bufMgr->unPinPage(filePtr, curPageNo, false);
+        bufMgr->unPinPage(filePtr, curPageNo, curDirtyFlag);
+        curDirtyFlag = false;
         // read the next page
         if ((status = curPage->getNextPage(nextPageNo)) != OK) {
             return status;
